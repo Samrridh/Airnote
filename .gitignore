@@ -1,0 +1,36 @@
+# Compiled binaries
+dump1090
+*.o
+*.so
+*.a
+
+# Build directories
+build/
+dist/
+
+# Log files
+*.log
+*.out
+
+# Data files (these can be large)
+*.bin
+*.dat
+aircraft.json
+history_*.json
+
+# System files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# IDE files
+.vscode/
+.idea/
+*.sublime-*
+
+# Temporary files
+tmp/
+temp/
+*.tmp
