@@ -23,13 +23,12 @@ def get_random_plane_data():
             print("No states found from OpenSky Network API.")
             return None, None 
 
-        # Filter out states without a country or invalid icao24
         valid_states = [s for s in states if s and len(s) > 2 and s[2] and s[0]]
         if not valid_states:
             print("No valid states with country information found.")
             return None, None
 
-        # Select a random plane from the valid states
+
         random_plane = random.choice(valid_states)
         icao24 = random_plane[0]  
         origin_country = random_plane[2] 
