@@ -1,139 +1,119 @@
-# from flask import Flask, render_template, request
-# import json, requests
-
-# app = Flask(__name__)
-
-
-# # ---------------- Write Dummy Data (integrating get.py) ----------------
-# def write_real_data():
-#     data = requests.get("https://opensky-network.org/api/states/all").json()
-#     for plane in data["states"][:2]:
-#         data = [
-#             {
-#                 "hex": plane[0],
-#                 "flight": plane[1],
-#                 "altitude": plane[13],
-#                 "country":plane[2],
-#                 "lat": plane[6],
-#                 "lon": plane[5]
-#             }
-#         ]
-#     with open("aircraft.json", "w") as f:
-#         json.dump(data, f, indent=4)
-
-
-# # ---------------- Dummy Data ----------------
-# def load_dummy_data():
-#     with open("aircraft.json", "r") as f:
-#         return json.load(f)
-
-# # ---------------- API ----------------
-# def get_departure_country(icao24, steps):
-#     url = f"https://opensky-network.org/api/states/all"
-#     steps.append("🛰️ Fetching real-time aircraft data...")
-#     try:
-#         response = requests.get(url, timeout=10)
-#         if response.status_code == 200:
-#             data = response.json()
-#             for state in data.get("states", []):
-#                 if state[0].lower() == icao24.lower():
-#                     steps.append(f"🌍 Found origin country: {state[2]}")
-#                     return state[2]
-#         steps.append("⚠️ Could not find origin country.")
-#         return None
-#     except:
-#         steps.append("❌ Failed to fetch origin country.")
-#         return None
-
-# def get_capital(country, steps):
-#     steps.append(f"🏙️ Finding capital of {country}...")
-#     try:
-#         response = requests.get(f"https://restcountries.com/v3.1/name/{country}", timeout=10)
-#         if response.status_code == 200:
-#             capital = response.json()[0]["capital"][0]
-#             steps.append(f"✅ Capital found: {capital}")
-#             return capital
-#     except:
-#         pass
-#     steps.append("❌ Could not find capital.")
-#     return "Unknown"
-
-# @app.route("/", methods=["GET", "POST"])
-# def index():
-#     steps = []
-#     steps.append("✈️ Loading dummy aircraft data...")
-#     write_real_data()
-#     plane = load_dummy_data()[0]
-#     icao24 = plane["hex"]
-#     steps.append(f"🔎 Found aircraft: HEX={icao24}")
-
-#     origin_country = get_departure_country(icao24, steps)
-#     capital = get_capital(origin_country, steps) if origin_country else "Unknown"
-
-#     result = None
-#     if request.method == "POST":
-#         answer = request.form.get("answer", "").strip().lower()   
-#         correct = capital.lower()
-#         if answer == correct:
-#             result = "✅ Correct!"
-#         else:
-#             result = f"❌ Wrong! Correct answer is {capital}"
-
-#     return render_template("index.html", country=origin_country, result=result, steps=steps)
-
-# if __name__ == "__main__":
-#     app.run(debug=True)
-
-
-
-
-from flask import Flask, render_template, request, Response, stream_with_context
-import json, requests, random, time
+from flask import Flask, render_template, request, session, redirect, url_for
+import json
+import requests
+import random
+import os
 
 app = Flask(__name__)
+# for testing only
+app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', 'easteregg')
 
-@app.route("/")
-def index():
-    return render_template("index.html")
+# ---------------- API Functions ----------------
 
-@app.route("/start")
-def start_quiz():
-    @stream_with_context
-    def generate():
-        yield "data: ✈️ Loading dummy aircraft data...\n\n"
-        time.sleep(1)
+def get_random_plane_data():
+    """Fetches data for a random plane from OpenSky Network."""
+    url = "https://opensky-network.org/api/states/all"
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()  
+        data = response.json()
+        states = data.get("states", [])
 
-        data = requests.get("https://opensky-network.org/api/states/all").json()
-        planes = data["states"]
-        valid_planes = [p for p in planes if p[0] and p[2] and p[5] and p[6]]
+        if not states:
+            print("No states found from OpenSky Network API.")
+            return None, None 
 
-        if not valid_planes:
-            yield "data: ❌ No valid planes found.\n\n"
-            return
+        # Filter out states without a country or invalid icao24
+        valid_states = [s for s in states if s and len(s) > 2 and s[2] and s[0]]
+        if not valid_states:
+            print("No valid states with country information found.")
+            return None, None
 
-        plane = random.choice(valid_planes)
-        icao24 = plane[0]
-        yield f"data: 🔎 Found aircraft: HEX={icao24}\n\n"
-        time.sleep(1)
+        # Select a random plane from the valid states
+        random_plane = random.choice(valid_states)
+        icao24 = random_plane[0]  
+        origin_country = random_plane[2] 
 
-        origin_country = plane[2]
-        yield f"data: 🌍 Found origin country: {origin_country}\n\n"
-        time.sleep(1)
+        return origin_country, icao24
 
-        capital = get_capital(origin_country)
-        yield f"data: ✅ Capital found: {capital}\n\n"
-        yield f"data: END|{origin_country}|{capital}\n\n"  # signal end of stream
-
-    return Response(generate(), mimetype='text/event-stream')
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching plane data: {e}")
+        return None, None
+    except json.JSONDecodeError as e:
+        print(f"Error decoding JSON from OpenSky API: {e}")
+        return None, None
+    except Exception as e:
+        print(f"An unexpected error occurred in get_random_plane_data: {e}")
+        return None, None
 
 def get_capital(country):
+    """Fetches the capital city for a given country."""
+    if not country:
+        return "Unknown"
     try:
         response = requests.get(f"https://restcountries.com/v3.1/name/{country}", timeout=10)
-        if response.status_code == 200:
-            return response.json()[0]["capital"][0]
-    except:
-        pass
+        response.raise_for_status()
+        data = response.json()
+        # The API returns a list of countries, take the first one
+        if data and isinstance(data, list) and data[0].get("capital"):
+            return data[0]["capital"][0] # Capital is usually a list, take the first
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching capital for {country}: {e}")
+    except json.JSONDecodeError as e:
+        print(f"Error decoding JSON from RestCountries API for {country}: {e}")
+    except Exception as e:
+        print(f"An unexpected error occurred in get_capital for {country}: {e}")
     return "Unknown"
+
+# ---------------- Flask Routes ----------------
+
+@app.route("/", methods=["GET", "POST"])
+def index():
+    result_message = session.get("result") 
+
+    if request.method == "POST":
+        user_answer = request.form.get("answer", "").strip().lower()
+        correct_capital = session.get("capital", "").strip().lower()
+
+        if user_answer == correct_capital and correct_capital != "unknown":
+            session["result"] = "✅ Correct!"
+        elif correct_capital == "unknown":
+            session["result"] = "❌ Could not determine the correct capital for this country."
+        else:
+            session["result"] = f"❌ Wrong! The correct answer was {session.get('capital')}"
+        
+        country_to_guess = session.get("origin_country")
+        return render_template("index.html", country=country_to_guess, result=session["result"])
+
+    if "capital" not in session or session.get("result") is not None:
+        session["result"] = None
+
+        origin_country, icao24 = get_random_plane_data()
+        capital = get_capital(origin_country)
+
+
+        session["origin_country"] = origin_country
+        session["capital"] = capital
+
+
+        if not origin_country or capital == "Unknown":
+            session["origin_country"] = "a country" # pookie
+            session["capital"] = "Unknown"
+            session["result"] = "Could not fetch a valid question. Please try again."
+    
+    country_to_guess = session.get("origin_country")
+    result_message = session.get("result") 
+
+    return render_template("index.html", country=country_to_guess, result=result_message)
+
+@app.route("/new_game")
+def new_game():
+    """Resets the game by clearing the session and redirecting to the index.
+    This effectively acts as the 'Refresh' button."""
+    session.pop("origin_country", None)
+    session.pop("capital", None)
+    session.pop("result", None) 
+    return redirect(url_for('index'))
 
 if __name__ == "__main__":
     app.run(debug=True)

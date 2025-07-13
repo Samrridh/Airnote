@@ -1,65 +1,116 @@
-<!-- <!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>AirQuiz - Capital Guess</title>
-  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-</head>
-<body class="bg-gradient-to-r from-blue-100 to-indigo-200 min-h-screen flex items-center justify-center">
-  <div class="bg-white p-10 rounded-2xl shadow-xl text-center max-w-md w-full">
-    <h1 class="text-2xl font-bold mb-4 text-gray-800">✈️ AirQuiz</h1>
-
-    <p class="text-lg mb-4">What is the capital of <span class="font-semibold text-indigo-600">{{ country }}</span>?</p>
-    
-    <form method="POST">
-      <input type="text" name="answer" placeholder="Your answer..." required class="w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-indigo-400 mb-4">
-      <button type="submit" class="w-full bg-indigo-500 hover:bg-indigo-600 text-white py-2 rounded-lg transition">Submit</button>
-    </form>
-
-    {% if result %}
-      <div class="mt-6 text-lg font-medium text-gray-800">
-        {{ result }}
-      </div>
-    {% endif %}
-
-    {% if steps %}
-      <div class="mt-8 text-left">
-        <h2 class="font-semibold text-gray-700 mb-2">🔍 Process:</h2>
-        <ul class="text-sm text-gray-600 list-disc list-inside space-y-1">
-          {% for step in steps %}
-            <li>{{ step }}</li>
-          {% endfor %}
-        </ul>
-      </div>
-    {% endif %}
-  </div>
-</body>
-</html> -->
-
-
-
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>AirQuiz - Capital Guess</title>
-  <script defer src="{{ url_for('static', filename='script.js') }}"></script>
-  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plane Capital Guesser</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f0f0f0;
+            color: #333;
+            text-align: center;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .container {
+            background-color: #fff;
+            padding: 30px 40px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            max-width: 500px;
+            width: 100%;
+        }
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 25px;
+        }
+        p {
+            font-size: 1.1em;
+            margin-bottom: 20px;
+        }
+        form {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+        input[type="text"] {
+            padding: 12px 15px;
+            width: 80%;
+            max-width: 300px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 1em;
+        }
+        button {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 5px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            color: white;
+            background-color: #3498db;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        .refresh-button {
+            background-color: #2ecc71; 
+            margin-top: 10px; 
+        }
+        .refresh-button:hover {
+            background-color: #27ae60;
+        }
+        .result {
+            margin-top: 25px;
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+        .correct {
+            color: #27ae60; 
+        }
+        .wrong {
+            color: #e74c3c; 
+        }
+        .info {
+            color: #f39c12; 
+        }
+    </style>
 </head>
-<body class="bg-blue-100 min-h-screen flex items-center justify-center">
-  <div class="bg-white p-8 rounded-xl shadow-lg w-full max-w-md text-center">
-    <h1 class="text-2xl font-bold mb-4 text-gray-800">✈️ AirQuiz</h1>
-    <button id="startBtn" class="bg-indigo-500 text-white px-4 py-2 rounded hover:bg-indigo-600 mb-4">Start Quiz</button>
+<body>
+    <div class="container">
+        <h1>Guess the Capital!</h1>
 
-    <div id="status" class="text-sm text-left space-y-1 text-gray-700 mb-4"></div>
+        {% if country and country != 'a country' %}
+            <p>A plane from **{{ country }}** is currently flying. What is its capital city?</p>
+        {% elif result and result == 'Could not fetch a valid question. Please try again.' %}
+             <p class="result info">{{ result }}</p>
+             <p>Click "Refresh" to try getting a new plane.</p>
+        {% else %}
+            <p>Fetching plane data...</p>
+        {% endif %}
 
-    <div id="quiz" class="hidden">
-      <p class="mb-2">What is the capital of <span id="countryName" class="font-semibold text-indigo-600"></span>?</p>
-      <input id="answerInput" type="text" class="w-full border px-3 py-2 rounded mb-2">
-      <button id="submitBtn" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">Submit</button>
-      <p id="result" class="mt-3 font-semibold"></p>
+        <form method="POST" action="/">
+            <input type="text" name="answer" placeholder="Enter capital city" required>
+            <button type="submit">Submit Guess</button>
+        </form>
+
+        {% if result %}
+            <p class="result {{ 'correct' if '✅' in result else ('wrong' if '❌' in result else 'info') }}">
+                {{ result }}
+            </p>
+        {% endif %}
+
+        <a href="{{ url_for('new_game') }}">
+            <button type="button" class="refresh-button">Refresh for another plane</button>
+        </a>
     </div>
-  </div>
 </body>
 </html>
