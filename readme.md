@@ -20,3 +20,9 @@ Real-time ADS-B plane spotting
 
 Fun hobby projects with RTL-SDR or dump1090
 
+--------
+How to install
+setup virtual environment 
+pip install flask
+pip install requests
+run app.py, and see the website on localhost port
