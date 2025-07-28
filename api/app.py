@@ -157,4 +157,4 @@ def new_game():
     return redirect(url_for('index', mode=session.get("mode", "opensky")))
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=5000)
