@@ -5,13 +5,54 @@ import random
 import os
 
 app = Flask(__name__)
-# for testing only
 app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', 'easteregg')
 
-# ---------------- API Functions ----------------
+# ---------------- Dump1090 data ----------------
+DUMP1090_HOST = "62.45.168.247"
+DUMP1090_PORT = 7878
+
+def get_random_icao24():
+    url = f"http://{DUMP1090_HOST}:{DUMP1090_PORT}/data/aircraft.json"
+    try:
+        response = requests.get(url, timeout=5)
+        response.raise_for_status()
+        data = response.json()
+
+        aircraft = data.get("aircraft", [])
+        valid_aircraft = [a for a in aircraft if a.get("hex")]
+
+        if not valid_aircraft:
+            print("No valid aircraft with ICAO24 found from dump1090-fa.")
+            return None
+
+        random_plane = random.choice(valid_aircraft)
+        icao24 = random_plane["hex"]
+        return icao24
+
+    except Exception as e:
+        print(f"Unexpected error in get_random_icao24: {e}")
+        return None
+
+def get_origin_country_from_opensky(icao24):
+    url = "https://opensky-network.org/api/states/all"
+    try:
+        response = requests.get(url, timeout=5)
+        response.raise_for_status()
+        states = response.json().get("states", [])
+
+        for state in states:
+            if state[0].lower() == icao24.lower():
+                country = state[2]
+                return country  
+
+        return None  
+    except requests.RequestException as e:
+        print("Error querying OpenSky API:", e)
+        return None
+
+# ---------------- Opensky data ----------------
 
 def get_random_plane_data():
-    """Fetches data for a random plane from OpenSky Network."""
     url = "https://opensky-network.org/api/states/all"
     try:
         response = requests.get(url, timeout=10)
@@ -38,24 +79,21 @@ def get_random_plane_data():
     except requests.exceptions.RequestException as e:
         print(f"Error fetching plane data: {e}")
         return None, None
-    except json.JSONDecodeError as e:
-        print(f"Error decoding JSON from OpenSky API: {e}")
-        return None, None
     except Exception as e:
         print(f"An unexpected error occurred in get_random_plane_data: {e}")
         return None, None
 
+
+# Common for both cases 
 def get_capital(country):
-    """Fetches the capital city for a given country."""
     if not country:
         return "Unknown"
     try:
         response = requests.get(f"https://restcountries.com/v3.1/name/{country}", timeout=10)
         response.raise_for_status()
         data = response.json()
-        # The API returns a list of countries, take the first one
         if data and isinstance(data, list) and data[0].get("capital"):
-            return data[0]["capital"][0] # Capital is usually a list, take the first
+            return data[0]["capital"][0] 
     except requests.exceptions.RequestException as e:
         print(f"Error fetching capital for {country}: {e}")
     except json.JSONDecodeError as e:
@@ -63,12 +101,17 @@ def get_capital(country):
     except Exception as e:
         print(f"An unexpected error occurred in get_capital for {country}: {e}")
     return "Unknown"
-
-# ---------------- Flask Routes ----------------
-
+    
 @app.route("/", methods=["GET", "POST"])
 def index():
-    result_message = session.get("result") 
+    # Handle mode switching
+    mode = request.args.get("mode")
+    if mode in ["opensky", "dump1090"]:
+        session["mode"] = mode
+    elif "mode" not in session:
+        session["mode"] = "opensky"  # default
+
+    selected_mode = session["mode"]
 
     if request.method == "POST":
         user_answer = request.form.get("answer", "").strip().lower()
@@ -80,39 +123,38 @@ def index():
             session["result"] = "❌ Could not determine the correct capital for this country."
         else:
             session["result"] = f"❌ Wrong! The correct answer was {session.get('capital')}"
-        
-        country_to_guess = session.get("origin_country")
-        return render_template("index.html", country=country_to_guess, result=session["result"])
 
+        country_to_guess = session.get("origin_country")
+        return render_template("index.html", country=country_to_guess, result=session["result"], mode=selected_mode)
+
+    # New game logic
     if "capital" not in session or session.get("result") is not None:
         session["result"] = None
 
-        origin_country, icao24 = get_random_plane_data()
+        if selected_mode == "dump1090":
+            icao24 = get_random_icao24()
+            origin_country = get_origin_country_from_opensky(icao24) if icao24 else None
+        else:  # opensky
+            origin_country, icao24 = get_random_plane_data()
+
         capital = get_capital(origin_country)
-
-
-        session["origin_country"] = origin_country
-        session["capital"] = capital
-
+        session["origin_country"] = origin_country or "a country"
+        session["capital"] = capital or "Unknown"
 
         if not origin_country or capital == "Unknown":
-            session["origin_country"] = "a country" # pookie
-            session["capital"] = "Unknown"
             session["result"] = "Could not fetch a valid question. Please try again."
-    
-    country_to_guess = session.get("origin_country")
-    result_message = session.get("result") 
 
-    return render_template("index.html", country=country_to_guess, result=result_message)
+    country_to_guess = session.get("origin_country")
+    result_message = session.get("result")
+    return render_template("index.html", country=country_to_guess, result=result_message, mode=selected_mode)
+
 
 @app.route("/new_game")
 def new_game():
-    """Resets the game by clearing the session and redirecting to the index.
-    This effectively acts as the 'Refresh' button."""
     session.pop("origin_country", None)
     session.pop("capital", None)
-    session.pop("result", None) 
-    return redirect(url_for('index'))
+    session.pop("result", None)
+    return redirect(url_for('index', mode=session.get("mode", "opensky")))
 
 if __name__ == "__main__":
     app.run(debug=True)

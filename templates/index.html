@@ -86,6 +86,17 @@
 </head>
 <body>
     <div class="container">
+
+
+        <form method="get" action="/">
+    <label for="mode">Select Mode:</label>
+    <select name="mode" id="mode" onchange="this.form.submit()">
+        <option value="opensky" {% if mode == 'opensky' %}selected{% endif %}>OpenSky</option>
+        <option value="dump1090" {% if mode == 'dump1090' %}selected{% endif %}>Dump1090</option>
+    </select>
+</form>
+
+
         <h1>Guess the Capital!</h1>
 
         {% if country and country != 'a country' %}
